@@ -1,0 +1,167 @@
+#Requires AutoHotkey v2.0
+#SingleInstance Off
+
+class RBTrayCmd {
+    static COPYDATA_MSG := 0x004A
+    static debugMode := false  ; Set to true for debugging with dialogs
+    
+    static Main() {
+        if A_Args.Length == 0 {
+            this.ShowUsage()
+            return
+        }
+        
+        command := A_Args[1]
+        
+        ; Check for debug flag
+        if A_Args.Length > 1 && A_Args[2] = "--debug" {
+            this.debugMode := true
+        }
+        
+        ; Validate command
+        if !this.IsValidCommand(command) {
+            this.ReportError("Invalid command: " . command)
+            if this.debugMode
+                this.ShowUsage()
+            ExitApp(1)
+        }
+        
+        ; Find RBTray main window
+        rbtrayHwnd := this.FindRBTrayWindow()
+        if !rbtrayHwnd {
+            this.ReportError("RBTray is not running. Please start RBTray.ahk2 first.")
+            ExitApp(1)
+        }
+        
+        ; Send command
+        if !this.SendCommand(rbtrayHwnd, command) {
+            this.ReportError("Failed to send command to RBTray.")
+            ExitApp(1)
+        }
+    }
+    
+    static IsValidCommand(command) {
+        validCommands := [
+            "restore_all",
+            "list"
+        ]
+        
+        ; Check for exact matches
+        for validCmd in validCommands {
+            if command = validCmd
+                return true
+        }
+        
+        ; Check for pattern matches
+        if InStr(command, "hide:") = 1 || InStr(command, "restore:") = 1
+            return true
+        
+        return false
+    }
+    
+    static FindRBTrayWindow() {
+        searchMethods := [
+            () => WinExist("RBTray_MessageWindow"),
+            () => WinExist("RBTray ahk_class AutoHotkeyGUI"),
+            () => WinExist("ahk_class AutoHotkeyGUI"),
+            () => this.SearchAllWindows()
+        ]
+        
+        for method in searchMethods {
+            hwnd := method()
+            if hwnd {
+                this.LogDebug("Found RBTray window: " . hwnd)
+                return hwnd
+            }
+        }
+        
+        this.LogDebug("RBTray window not found")
+        return 0
+    }
+    
+    static SearchAllWindows() {
+        try {
+            allWindows := WinGetList("ahk_class AutoHotkeyGUI")
+            for hwnd in allWindows {
+                try {
+                    title := WinGetTitle(hwnd)
+                    if InStr(title, "RBTray") {
+                        return hwnd
+                    }
+                } catch {
+                    continue
+                }
+            }
+        } catch {
+        }
+        return 0
+    }
+    
+    static SendCommand(targetHwnd, command) {
+        try {
+            this.LogDebug("Sending command: " . command . " to HWND: " . targetHwnd)
+            
+            ; Create buffer for the command string (UTF-16)
+            commandBuffer := Buffer(StrPut(command, "UTF-16") * 2)
+            StrPut(command, commandBuffer, "UTF-16")
+            
+            ; Create COPYDATASTRUCT
+            cds := Buffer(3 * A_PtrSize)
+            NumPut("UPtr", 0, cds, 0)  ; dwData
+            NumPut("UInt", commandBuffer.Size, cds, A_PtrSize)  ; cbData
+            NumPut("Ptr", commandBuffer.Ptr, cds, 2 * A_PtrSize)  ; lpData
+            
+            ; Send message
+            result := SendMessage(this.COPYDATA_MSG, 0, cds.Ptr, targetHwnd)
+            this.LogDebug("Message sent, result: " . result)
+            
+            return true
+        } catch as e {
+            this.LogDebug("Error sending command: " . e.Message)
+            return false
+        }
+    }
+    
+    static ShowUsage() {
+        usage := "RBTrayCmd - Command line interface for RBTray`n`n"
+        usage .= "Usage: RBTrayCmd.ahk2 <command>`n`n"
+        usage .= "Commands:`n"
+        usage .= "  hide:<window_selector>    Hide window to tray`n"
+        usage .= "  restore:<window_selector>  Restore window from tray`n"
+        usage .= "  restore_all               Restore all hidden windows`n"
+        usage .= "  list                      List all hidden windows`n`n"
+        usage .= "Window selectors:`n"
+        usage .= "  notepad.exe               By executable name`n"
+        usage .= "  ahk_exe notepad.exe       By executable (explicit)`n"
+        usage .= "  ahk_class Notepad         By window class`n"
+        usage .= "  ahk_pid 1234              By process ID`n"
+        usage .= "  ahk_id 5678               By window ID`n"
+        usage .= "  Window Title              By window title`n`n"
+        usage .= "Examples:`n"
+        usage .= "  RBTrayCmd.ahk2 hide:notepad.exe`n"
+        usage .= "  RBTrayCmd.ahk2 restore:ahk_class Notepad`n"
+        usage .= "  RBTrayCmd.ahk2 restore_all`n"
+        
+        MsgBox(usage, "RBTrayCmd Usage", "Icon!")
+    }
+    
+    static ShowError(message) {
+        MsgBox("Error: " . message, "RBTrayCmd Error", "IconX")
+    }
+    
+    static LogDebug(message) {
+        ; Always log for debugging
+        FileAppend(A_Now . ": " . message . "`n", A_Temp . "\\RBTrayCmd_Debug.log")
+    }
+    
+    static ReportError(message) {
+        ; Log error and optionally show dialog based on debug mode
+        this.LogDebug("ERROR: " . message)
+        if this.debugMode {
+            this.ShowError(message)
+        }
+    }
+}
+
+; Run the application
+RBTrayCmd.Main()
