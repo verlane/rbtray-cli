@@ -15,10 +15,10 @@ RBTray clone implemented in AutoHotkey v2 - A utility to minimize windows to sys
 
 1. AutoHotkey v2 required
 2. File structure:
-   - `RBTray.ahk2` - Main application
-   - `RBTrayCmd.ahk2` - CLI command tool
-   - `RBTrayCmd_Test.ahk2` - Test suite
-   - `Example.ahk2` - Quick start example
+   - `RBTray.ahk` - Main application
+   - `RBTrayCmd.ahk` - CLI command tool
+   - `RBTrayCmd_Test.ahk` - Test suite
+   - `Example.ahk` - Quick start example
    - `logs/` - Log files directory (created automatically)
 
 ## Quick Start
@@ -26,7 +26,7 @@ RBTray clone implemented in AutoHotkey v2 - A utility to minimize windows to sys
 Run the example to see RBTray in action:
 
 ```bash
-"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" Example.ahk2
+"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" Example.ahk
 ```
 
 This will:
@@ -40,14 +40,14 @@ This will:
 
 ```bash
 # Normal mode (no logging)
-"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTray.ahk2
+"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTray.ahk
 
 # Debug mode (with logging)
-"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTray.ahk2 --debug
+"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTray.ahk --debug
 
 # Or run directly (if AutoHotkey v2 is associated)
-RBTray.ahk2
-RBTray.ahk2 --debug
+RBTray.ahk
+RBTray.ahk --debug
 ```
 
 ### Hotkeys
@@ -58,30 +58,30 @@ RBTray.ahk2 --debug
 
 ### CLI Commands
 
-RBTrayCmd automatically starts RBTray.ahk2 if not already running.
+RBTrayCmd automatically starts RBTray.ahk if not already running.
 
 ```bash
 # Hide windows
-"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk2 hide:notepad.exe
-"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk2 hide:ahk_exe chrome.exe
-"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk2 hide:ahk_class Notepad
-"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk2 hide:ahk_pid 12345
-"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk2 hide:ahk_id 0xABCDEF
-"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk2 "hide:Untitled - Notepad"
+"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk hide:notepad.exe
+"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk hide:ahk_exe chrome.exe
+"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk hide:ahk_class Notepad
+"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk hide:ahk_pid 12345
+"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk hide:ahk_id 0xABCDEF
+"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk "hide:Untitled - Notepad"
 
 # Restore windows
-"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk2 restore:notepad.exe
-"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk2 restore:ahk_class Notepad
+"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk restore:notepad.exe
+"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk restore:ahk_class Notepad
 
 # Restore all windows
-"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk2 restore_all
+"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk restore_all
 
 # List hidden windows (shows dialog box)
-"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk2 list
+"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk list
 
 # Debug mode (works with any command)
-"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk2 "hide:Windows PowerShell" --debug
-"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk2 restore_all --debug
+"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk "hide:Windows PowerShell" --debug
+"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk restore_all --debug
 ```
 
 ## AHK Selector Format
@@ -108,7 +108,7 @@ When using `--debug` flag, log files are created in `logs/` directory:
 Run the comprehensive test suite:
 
 ```bash
-"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd_Test.ahk2
+"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd_Test.ahk
 ```
 
 The test suite covers:
@@ -133,10 +133,10 @@ The test suite covers:
 
 ## How It Works
 
-1. **Main Application**: `RBTray.ahk2` runs in background and creates a system tray icon
+1. **Main Application**: `RBTray.ahk` runs in background and creates a system tray icon
 2. **Message Window**: Creates a hidden `ToolWindow` to receive CLI commands (invisible in Alt+Tab)
 3. **Window Hiding**: Windows are hidden via hotkeys (Win+Right-click) or CLI commands
-4. **IPC Communication**: `RBTrayCmd.ahk2` communicates with main app using WM_COPYDATA messages
+4. **IPC Communication**: `RBTrayCmd.ahk` communicates with main app using WM_COPYDATA messages
 5. **Window Management**: Hidden windows are stored in Map structure with metadata (title, class, PID, etc.)
 6. **Tray Menu**: Dynamic tray menu shows each hidden window with original program icon
 7. **Restoration**: Click tray menu items to restore individual windows, or use CLI commands
@@ -153,11 +153,11 @@ The test suite covers:
 
 ## Troubleshooting
 
-- **Commands not working**: RBTrayCmd automatically starts RBTray.ahk2 if needed
+- **Commands not working**: RBTrayCmd automatically starts RBTray.ahk if needed
 - **Windows not hiding**: Check if window is valid (not system window)
 - **Logs not appearing**: Use `--debug` flag with RBTrayCmd commands
 - **Test failures**: Some tests may fail intermittently due to window timing
-- **Cross-directory execution**: RBTrayCmd automatically locates RBTray.ahk2 in same directory
+- **Cross-directory execution**: RBTrayCmd automatically locates RBTray.ahk in same directory
 
 ## License
 

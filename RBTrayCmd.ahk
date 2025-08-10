@@ -32,12 +32,12 @@ class RBTrayCmd {
         
         rbtrayHwnd := this.FindRBTrayWindow()
         if !rbtrayHwnd {
-            this.LogDebug("RBTray not found, starting RBTray.ahk2...")
+            this.LogDebug("RBTray not found, starting RBTray.ahk...")
             this.StartRBTray()
             Sleep(1500)  ; Wait for RBTray to initialize
             rbtrayHwnd := this.FindRBTrayWindow()
             if !rbtrayHwnd
-                this.ExitWithError("Failed to start RBTray. Please check RBTray.ahk2 manually.")
+                this.ExitWithError("Failed to start RBTray. Please check RBTray.ahk manually.")
         }
         
         if !this.SendCommand(rbtrayHwnd, command)
@@ -66,9 +66,9 @@ class RBTrayCmd {
     }
     
     static StartRBTray() {
-        ; Use the directory where RBTrayCmd.ahk2 is located, not A_ScriptDir
+        ; Use the directory where RBTrayCmd.ahk is located, not A_ScriptDir
         cmdDir := StrReplace(A_ScriptFullPath, A_ScriptName, "")
-        rbtrayPath := cmdDir . "RBTray.ahk2"
+        rbtrayPath := cmdDir . "RBTray.ahk"
         this.LogDebug("Starting RBTray from: " . rbtrayPath)
 
         try {
@@ -116,7 +116,7 @@ class RBTrayCmd {
     
     static ShowUsage() {
         usage := "RBTrayCmd - Command line interface for RBTray`n`n"
-        usage .= "Usage: RBTrayCmd.ahk2 <command>`n`n"
+        usage .= "Usage: RBTrayCmd.ahk <command>`n`n"
         usage .= "Commands:`n"
         usage .= "  hide:<window_selector>    Hide window to tray`n"
         usage .= "  restore:<window_selector>  Restore window from tray`n"
@@ -130,9 +130,9 @@ class RBTrayCmd {
         usage .= "  ahk_id 5678               By window ID`n"
         usage .= "  Window Title              By window title`n`n"
         usage .= "Examples:`n"
-        usage .= "  RBTrayCmd.ahk2 hide:notepad.exe`n"
-        usage .= "  RBTrayCmd.ahk2 restore:ahk_class Notepad`n"
-        usage .= "  RBTrayCmd.ahk2 restore_all`n"
+        usage .= "  RBTrayCmd.ahk hide:notepad.exe`n"
+        usage .= "  RBTrayCmd.ahk restore:ahk_class Notepad`n"
+        usage .= "  RBTrayCmd.ahk restore_all`n"
         
         MsgBox(usage, "RBTrayCmd Usage", "Icon!")
     }

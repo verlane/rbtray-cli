@@ -4,4 +4,4 @@
 if (!WinExist('ahk_exe notepad.exe')) {
   RunWait('notepad.exe')
 }
-Run(A_AhkPath . ' ' . A_ScriptDir . '\RBTrayCmd.ahk2 "hide:ahk_class Notepad"')
+Run(A_AhkPath . ' ' . A_ScriptDir . '\RBTrayCmd.ahk "hide:ahk_class Notepad"')

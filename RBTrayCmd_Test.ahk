@@ -1,7 +1,7 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
 
-; Language-independent test suite for RBTrayCmd.ahk2 with proper state verification
+; Language-independent test suite for RBTrayCmd.ahk with proper state verification
 class RBTrayTest {
     static testResults := []
     static mainAppPid := 0
@@ -60,7 +60,7 @@ class RBTrayTest {
         ; Start RBTray main app
         try {
             ; Use full path to AutoHotkey and RBTray script
-            rbtrayPath := A_ScriptDir . "\RBTray.ahk2"
+            rbtrayPath := A_ScriptDir . "\RBTray.ahk"
             this.Log("Attempting to start RBTray at: " . rbtrayPath)
             
             Run('"' . A_AhkPath . '" "' . rbtrayPath . '" --debug', , , &pid)
@@ -290,14 +290,14 @@ class RBTrayTest {
     }
     
     static RunCmd(args) {
-        this.Log("  Executing: RBTrayCmd.ahk2 " . args)
+        this.Log("  Executing: RBTrayCmd.ahk " . args)
         
         if !ProcessExist(this.mainAppPid) {
             this.Log("  WARNING: Main RBTray app is not running!")
             return false
         }
         
-        scriptPath := A_ScriptDir . "\RBTrayCmd.ahk2"
+        scriptPath := A_ScriptDir . "\RBTrayCmd.ahk"
         cmdLine := '"' . A_AhkPath . '" "' . scriptPath . '" "' . args . '"'
         
         try {
@@ -358,9 +358,9 @@ class RBTrayTest {
                 passedTests++
         }
         
-        resultText := "═══════════════════════════════════════════════════════`n"
-        resultText .= "           RBTrayCmd Test Results`n"
-        resultText .= "═══════════════════════════════════════════════════════`n`n"
+        resultText := "════════════════════════`n"
+        resultText .= " RBTrayCmd Test Results`n"
+        resultText .= "════════════════════════`n`n"
         
         if totalTests == 0 {
             resultText .= "⚠ WARNING: No tests were executed!`n"
@@ -376,16 +376,16 @@ class RBTrayTest {
             }
         }
         
-        resultText .= "`n═══════════════════════════════════════════════════════`n"
+        resultText .= "`n════════════════════════`n"
         resultText .= "Total: " . totalTests . " tests`n"
         
         passRate := totalTests > 0 ? Round(passedTests/totalTests*100, 1) : 0
         resultText .= "Passed: " . passedTests . " (" . passRate . "%)`n"
         resultText .= "Failed: " . (totalTests - passedTests) . "`n"
-        resultText .= "═══════════════════════════════════════════════════════`n`n"
+        resultText .= "════════════════════════`n`n"
         resultText .= "System: Windows " . A_OSVersion . "`n"
         resultText .= "Language: " . A_Language . " (0x" . Format("{:X}", A_Language) . ")`n"
-        resultText .= "═══════════════════════════════════════════════════════`n"
+        resultText .= "════════════════════════`n"
         
         ; Log the full results first
         this.Log("=== FINAL TEST RESULTS ===")
