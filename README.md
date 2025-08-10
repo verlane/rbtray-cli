@@ -58,6 +58,8 @@ RBTray.ahk2 --debug
 
 ### CLI Commands
 
+RBTrayCmd automatically starts RBTray.ahk2 if not already running.
+
 ```bash
 # Hide windows
 "C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk2 hide:notepad.exe
@@ -76,6 +78,10 @@ RBTray.ahk2 --debug
 
 # List hidden windows (shows dialog box)
 "C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk2 list
+
+# Debug mode (works with any command)
+"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk2 "hide:Windows PowerShell" --debug
+"C:\Program Files\AutoHotkey\v2\AutoHotkey.exe" RBTrayCmd.ahk2 restore_all --debug
 ```
 
 ## AHK Selector Format
@@ -147,10 +153,11 @@ The test suite covers:
 
 ## Troubleshooting
 
-- **Commands not working**: Make sure RBTray.ahk2 is running first
+- **Commands not working**: RBTrayCmd automatically starts RBTray.ahk2 if needed
 - **Windows not hiding**: Check if window is valid (not system window)
-- **Logs not appearing**: Use `--debug` flag when starting RBTray.ahk2
+- **Logs not appearing**: Use `--debug` flag with RBTrayCmd commands
 - **Test failures**: Some tests may fail intermittently due to window timing
+- **Cross-directory execution**: RBTrayCmd automatically locates RBTray.ahk2 in same directory
 
 ## License
 

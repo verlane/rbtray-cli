@@ -15,16 +15,30 @@ class RBTrayCmd {
             return
         }
         
+        ; Check for debug mode in any argument position
+        this.debugMode := false
+        for arg in A_Args {
+            if arg = "--debug" {
+                this.debugMode := true
+                break
+            }
+        }
+        
         command := A_Args[1]
-        this.debugMode := (A_Args.Length > 1 && A_Args[2] = "--debug")
         
         ; Validate and execute
         if !this.IsValidCommand(command)
             this.ExitWithError("Invalid command: " . command)
         
         rbtrayHwnd := this.FindRBTrayWindow()
-        if !rbtrayHwnd
-            this.ExitWithError("RBTray is not running. Please start RBTray.ahk2 first.")
+        if !rbtrayHwnd {
+            this.LogDebug("RBTray not found, starting RBTray.ahk2...")
+            this.StartRBTray()
+            Sleep(1500)  ; Wait for RBTray to initialize
+            rbtrayHwnd := this.FindRBTrayWindow()
+            if !rbtrayHwnd
+                this.ExitWithError("Failed to start RBTray. Please check RBTray.ahk2 manually.")
+        }
         
         if !this.SendCommand(rbtrayHwnd, command)
             this.ExitWithError("Failed to send command to RBTray.")
@@ -42,8 +56,6 @@ class RBTrayCmd {
         ; Try common window searches in order of likelihood
         hwnd := WinExist("RBTray_MessageWindow")
             || WinExist("RBTray ahk_class AutoHotkeyGUI")
-            || WinExist("ahk_class AutoHotkeyGUI")
-            || this.SearchAllWindows()
         
         if hwnd
             this.LogDebug("Found RBTray window: " . hwnd)
@@ -53,26 +65,22 @@ class RBTrayCmd {
         return hwnd
     }
     
-    static SearchAllWindows() {
-        ; Fallback: search through all AutoHotkey GUIs
+    static StartRBTray() {
+        ; Use the directory where RBTrayCmd.ahk2 is located, not A_ScriptDir
+        cmdDir := StrReplace(A_ScriptFullPath, A_ScriptName, "")
+        rbtrayPath := cmdDir . "RBTray.ahk2"
+        this.LogDebug("Starting RBTray from: " . rbtrayPath)
+
         try {
-            allWindows := WinGetList("ahk_class AutoHotkeyGUI")
-        } catch {
-            return 0
-        }
-        if !allWindows
-            return 0
-            
-        for hwnd in allWindows {
-            try {
-                title := WinGetTitle(hwnd)
-            } catch {
-                title := ""
+            if this.debugMode {
+                Run(A_AhkPath . ' "' . rbtrayPath . '" --debug')
+            } else {
+                Run(A_AhkPath . ' "' . rbtrayPath . '"')
             }
-            if InStr(title, "RBTray")
-                return hwnd
+            this.LogDebug("RBTray started successfully")
+        } catch as e {
+            this.LogDebug("Failed to start RBTray: " . e.message)
         }
-        return 0
     }
     
     static SendCommand(targetHwnd, command) {
