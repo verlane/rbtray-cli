@@ -1,0 +1,9 @@
+#Requires AutoHotkey v2.0
+#SingleInstance Force
+
+Run(A_AhkPath . ' ' . A_ScriptDir . '\RBTray.ahk2')
+Sleep(1000)
+if (!WinExist('ahk_exe notepad.exe')) {
+  RunWait('notepad.exe')
+}
+Run(A_AhkPath . ' ' . A_ScriptDir . '\RBTrayCmd.ahk2 "hide:ahk_class Notepad"')

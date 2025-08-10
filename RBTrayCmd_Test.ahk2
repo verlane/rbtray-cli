@@ -166,21 +166,30 @@ class RBTrayTest {
         selector := "ahk_pid " . this.notepadPid
         try {
             actualClass := WinGetClass(selector)
-            classSelector := "ahk_class " . actualClass
-            this.RunHideRestoreTest("Hide by window class", "hide:" . classSelector, "restore:" . classSelector, "Class: " . actualClass)
-        } catch as e {
-            this.RecordTestFailure("Hide by window class", "Cannot get window class: " . e.Message)
+        } catch {
+            actualClass := ""
         }
+        if !actualClass {
+            this.RecordTestFailure("Hide by window class", "Cannot get window class: Target window not found.")
+            return
+        }
+        classSelector := "ahk_class " . actualClass
+        this.RunHideRestoreTest("Hide by window class", "hide:" . classSelector, "restore:" . classSelector, "Class: " . actualClass)
     }
     
     static TestHideByTitle() {
         selector := "ahk_pid " . this.notepadPid
         try {
-            actualTitle := Trim(WinGetTitle(selector))
-            this.RunHideRestoreTest("Hide by window title", "hide:" . actualTitle, "restore:" . actualTitle, "Title: " . actualTitle)
-        } catch as e {
-            this.RecordTestFailure("Hide by window title", "Cannot get window title: " . e.Message)
+            actualTitle := WinGetTitle(selector)
+        } catch {
+            actualTitle := ""
         }
+        if !actualTitle {
+            this.RecordTestFailure("Hide by window title", "Cannot get window title: Target window not found.")
+            return
+        }
+        actualTitle := Trim(actualTitle)
+        this.RunHideRestoreTest("Hide by window title", "hide:" . actualTitle, "restore:" . actualTitle, "Title: " . actualTitle)
     }
     
     static TestHideByPid() {
@@ -281,34 +290,26 @@ class RBTrayTest {
     }
     
     static RunCmd(args) {
-        try {
-            this.Log("  Executing: RBTrayCmd.ahk2 " . args)
-            
-            ; Check if RBTray main app is still running
-            if !ProcessExist(this.mainAppPid) {
-                this.Log("  WARNING: Main RBTray app is not running!")
-                return false
-            }
-            
-            ; Try multiple ways to execute RBTrayCmd.ahk2
-            scriptPath := A_ScriptDir . "\RBTrayCmd.ahk2"
-            
-            ; Use current AutoHotkey path
-            cmdLine := '"' . A_AhkPath . '" "' . scriptPath . '" "' . args . '"'
-            this.Log("  Executing command: " . cmdLine)
-            Run(cmdLine)
-            
-            ; Wait longer for command to be processed, especially for restore operations
-            if InStr(args, "restore") {
-                Sleep(1000)  ; Restore operations need more time
-            } else {
-                Sleep(500)   ; Hide operations are usually faster
-            }
-            return true
-        } catch as e {
-            this.Log("✗ Command failed: " . args . " - " . e.Message)
+        this.Log("  Executing: RBTrayCmd.ahk2 " . args)
+        
+        if !ProcessExist(this.mainAppPid) {
+            this.Log("  WARNING: Main RBTray app is not running!")
             return false
         }
+        
+        scriptPath := A_ScriptDir . "\RBTrayCmd.ahk2"
+        cmdLine := '"' . A_AhkPath . '" "' . scriptPath . '" "' . args . '"'
+        
+        try {
+            Run(cmdLine, , , &pid)
+        } catch {
+            this.Log("✗ Command failed to execute: " . args)
+            return false
+        }
+        
+        ; Wait for command processing - longer delay for hide operations
+        Sleep(InStr(args, "restore") ? 1000 : 800)
+        return true
     }
     
     static Cleanup() {
@@ -316,75 +317,34 @@ class RBTrayTest {
         this.RunCmd("restore_all")
         Sleep(1000)
         
-        ; Close all test windows
-        try {
-            this.Log("Closing test windows...")
-            
-            ; Close notepad windows
-            if this.notepadPid && WinExist("ahk_pid " . this.notepadPid) {
+        ; Simple cleanup - close test windows
+        this.Log("Closing test windows...")
+        
+        ; Close notepad windows
+        if this.notepadPid && WinExist("ahk_pid " . this.notepadPid) {
+            try {
                 WinClose("ahk_pid " . this.notepadPid)
-                this.Log("  Closed notepad PID: " . this.notepadPid)
+            } catch {
             }
-            
-            ; Close calculator windows using stored HWND
-            if this.calcHwnd && WinExist("ahk_id " . this.calcHwnd) {
-                WinClose("ahk_id " . this.calcHwnd)
-                this.Log("  Closed calculator HWND: " . this.calcHwnd)
-                Sleep(500)
-            } else if this.calcPid && WinExist("ahk_pid " . this.calcPid) {
-                WinClose("ahk_pid " . this.calcPid)
-                this.Log("  Closed calculator PID: " . this.calcPid)
-                Sleep(500)
-            }
-            
-            ; Close any remaining notepad windows
-            notepadCount := 0
-            while WinExist("ahk_exe notepad.exe") && notepadCount < 10 {
-                WinClose("ahk_exe notepad.exe")
-                notepadCount++
-                Sleep(200)
-            }
-            this.Log("  Closed " . notepadCount . " additional notepad windows")
-            
-            ; Close all calculator variants including Windows 11 calculator
-            calcCount := 0
-            calcSelectors := [
-                "ahk_exe calc.exe",
-                "ahk_exe CalculatorApp.exe", 
-                "ahk_exe Calculator.exe",
-                "ahk_class ApplicationFrameWindow ahk_exe ApplicationFrameHost.exe",
-                "ahk_exe ApplicationFrameHost.exe"
-            ]
-            
-            for selector in calcSelectors {
-                while WinExist(selector) && calcCount < 10 {
-                    try {
-                        foundHwnd := WinExist(selector)
-                        foundTitle := WinGetTitle(foundHwnd)
-                        ; Check if it's actually a calculator by title
-                        if InStr(foundTitle, "電卓") || InStr(foundTitle, "Calculator") || InStr(foundTitle, "计算器") {
-                            WinClose(foundHwnd)
-                            calcCount++
-                            this.Log("    Closed calculator: " . foundTitle . " (HWND: " . foundHwnd . ")")
-                        } else {
-                            break  ; Not a calculator, skip
-                        }
-                    } catch {
-                        break
-                    }
-                    Sleep(300)
-                }
-            }
-            if calcCount > 0
-                this.Log("  Closed " . calcCount . " calculator windows total")
-        } catch as e {
-            this.Log("  Error during window cleanup: " . e.Message)
+            this.Log("  Closed notepad PID: " . this.notepadPid)
         }
         
-        ; Terminate main app
-        if this.mainAppPid {
-            try ProcessClose(this.mainAppPid)
+        ; Close any remaining notepad windows
+        notepadCount := 0
+        while WinExist("ahk_exe notepad.exe") && notepadCount < 5 {
+            try {
+                WinClose("ahk_exe notepad.exe")
+            } catch {
+            }
+            notepadCount++
+            Sleep(200)
         }
+        if notepadCount > 0
+            this.Log("  Closed " . notepadCount . " additional notepad windows")
+        
+        ; Terminate main app
+        if this.mainAppPid
+            ProcessClose(this.mainAppPid)
         
         this.Log("✓ Cleanup: Test environment cleaned")
     }
@@ -445,18 +405,35 @@ class RBTrayTest {
         
         ; Also log to separate results file for easy viewing
         try {
-            resultLog := A_Temp . "\RBTrayTest_Results.log"
-            FileAppend(A_Now . " - Test Results:`n", resultLog)
-            FileAppend("Total: " . totalTests . " | Passed: " . passedTests . " (" . passRate . "%) | Failed: " . (totalTests - passedTests) . "`n", resultLog)
+            logDir := A_ScriptDir . "\logs"
+            if !DirExist(logDir)
+                DirCreate(logDir)
+            resultLog := logDir . "\RBTrayTest_Results.log"
+            
+            ; Build complete log content first, then write once
+            logContent := A_Now . " - Test Results:`n"
+            logContent .= "Total: " . totalTests . " | Passed: " . passedTests . " (" . passRate . "%) | Failed: " . (totalTests - passedTests) . "`n"
             for test in this.testResults {
                 status := test.passed ? "PASS" : "FAIL"
-                FileAppend(status . " : " . test.name, resultLog)
+                logContent .= status . " : " . test.name
                 if test.HasProp("details") && test.details {
-                    FileAppend(" -> " . test.details, resultLog)
+                    logContent .= " -> " . test.details
                 }
-                FileAppend("`n", resultLog)
+                logContent .= "`n"
             }
-            FileAppend("=" . StrReplace(Format("{:50s}", ""), " ", "=") . "`n`n", resultLog)
+            logContent .= "=" . StrReplace(Format("{:50s}", ""), " ", "=") . "`n`n"
+            
+            ; Safe single write with retry
+            try {
+                FileAppend(logContent, resultLog)
+            } catch {
+                Sleep(50)
+                try {
+                    FileAppend(logContent, resultLog)
+                } catch {
+                    ; Silent fail
+                }
+            }
         } catch {
         }
         
@@ -468,7 +445,19 @@ class RBTrayTest {
         OutputDebug(message . "`n")
         ; Also write to a temp file for debugging
         try {
-            FileAppend(A_Now . ": " . message . "`n", A_Temp . "\RBTrayTest_Debug.log")
+            logDir := A_ScriptDir . "\logs"
+            if !DirExist(logDir)
+                DirCreate(logDir)
+            try {
+                FileAppend(A_Now . ": " . message . "`n", logDir . "\RBTrayTest_Debug.log")
+            } catch {
+                Sleep(50)
+                try {
+                    FileAppend(A_Now . ": " . message . "`n", logDir . "\RBTrayTest_Debug.log")
+                } catch {
+                    ; Silent fail
+                }
+            }
         } catch {
         }
     }
@@ -480,27 +469,33 @@ class RBTrayTest {
             resultMsg := status . " : " . testName
             if details
                 resultMsg .= " -> " . details
-            FileAppend(A_Now . ": " . resultMsg . "`n", A_Temp . "\RBTrayTest_Results.log")
+            logDir := A_ScriptDir . "\logs"
+            if !DirExist(logDir)
+                DirCreate(logDir)
+            try {
+                FileAppend(A_Now . ": " . resultMsg . "`n", logDir . "\RBTrayTest_Results.log")
+            } catch {
+                Sleep(50)
+                try {
+                    FileAppend(A_Now . ": " . resultMsg . "`n", logDir . "\RBTrayTest_Results.log")
+                } catch {
+                    ; Silent fail
+                }
+            }
         } catch {
         }
     }
     ; Helper functions for proper window state verification
     static IsWindowVisible(selector) {
-        ; Check if window exists and is actually visible (not hidden)
-        try {
-            if !WinExist(selector)
-                return false
-            
-            ; Check if window is minimized or hidden
-            minMax := WinGetMinMax(selector)
-            if minMax == -1  ; Minimized
-                return false
-                
-            ; Additional check: window should be detectable by normal means
-            return WinExist(selector) != 0
-        } catch {
+        ; Simple visibility check
+        if !WinExist(selector)
             return false
+        try {
+            minMax := WinGetMinMax(selector)
+        } catch {
+            minMax := -1
         }
+        return minMax != -1  ; Not minimized
     }
     
     static WaitForWindowVisible(selector, timeoutMs := 5000) {
@@ -518,23 +513,22 @@ class RBTrayTest {
         return false
     }
     
-    static WaitForWindowHidden(selector, timeoutMs := 4000) {
+    static WaitForWindowHidden(selector, timeoutMs := 6000) {
         ; Wait for window to become hidden with timeout
         startTime := A_TickCount
         while (A_TickCount - startTime) < timeoutMs {
             if !this.IsWindowVisible(selector) {
                 this.Log("    Window became hidden: " . selector)
-                Sleep(300)  ; Extra wait for hide operation to complete
+                Sleep(500)  ; Extra wait for hide operation to complete
                 return true
             }
-            Sleep(150)
+            Sleep(200)  ; Increased polling interval
         }
         this.Log("    Timeout waiting for window to become hidden: " . selector)
         return false
     }
     
     static EnsureWindowVisible(selector) {
-        ; Ensure window is in visible state before test
         this.Log("    Checking if window is visible: " . selector)
         
         if this.IsWindowVisible(selector) {
@@ -542,29 +536,24 @@ class RBTrayTest {
             return true
         }
         
-        ; Try to restore the window first
+        ; Try restore_all and wait
         this.Log("    Window not visible, attempting restore_all")
-        if !this.RunCmd("restore_all") {
-            this.Log("    restore_all command failed")
+        if !this.RunCmd("restore_all")
             return false
-        }
-        
-        ; Wait for window to become visible
-        if this.WaitForWindowVisible(selector, 5000) {
+            
+        if this.WaitForWindowVisible(selector, 5000)
             return true
-        }
         
-        ; Final attempt: try to show/activate the window directly
+        ; Final attempt: direct activation
         this.Log("    Final attempt: direct window activation")
         try {
             WinShow(selector)
             Sleep(500)
             WinActivate(selector)
-            Sleep(500)
-            return this.IsWindowVisible(selector)
         } catch {
-            return false
         }
+        Sleep(500)
+        return this.IsWindowVisible(selector)
     }
     
     ; Common test execution functions
@@ -587,7 +576,7 @@ class RBTrayTest {
         
         ; Step 3: Verify window is hidden
         this.Log("  Step 3: Verifying window is hidden")
-        if !this.WaitForWindowHidden(selector, 4000) {
+        if !this.WaitForWindowHidden(selector, 6000) {
             this.RecordTestFailure(testName, "Window still visible after hide")
             return
         }

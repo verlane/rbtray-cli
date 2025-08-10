@@ -40,26 +40,22 @@ class RBTrayApp {
         this.gui.Show("Hide")
         
         ; Create message window for CLI communication
-        this.msgWin := Gui("-MaximizeBox -MinimizeBox", "RBTray_MessageWindow")
+        this.msgWin := Gui("+ToolWindow -MaximizeBox -MinimizeBox", "RBTray_MessageWindow")
         this.msgWin.Add("Text", , "RBTray Message Receiver`nThis window receives CLI commands")
         
         ; Show or hide based on debug mode
         if this.debugMode {
             this.msgWin.Show("w350 h100")
         } else {
-            ; Important: Show but make it invisible with 0x0 size, not "Hide"
-            ; This ensures the window exists and can be found by RBTrayCmd
-            this.msgWin.Show("w0 h0")
+            ; Hide the message window - RBTrayCmd uses DetectHiddenWindows(true) to find it
+            this.msgWin.Show("Hide")
         }
         
         OnMessage(0x004A, ObjBindMethod(this, "ReceiveCommand"))
     }
     
     static InitializeHotkeys() {
-        ; Keyboard shortcuts
-        Hotkey("^+t", (*) => this.MinimizeToTray())
-        Hotkey("^+r", (*) => this.RestoreAll())
-        ; Exit handler
+        ; Exit handler - restore all windows when program exits
         OnExit((*) => this.RestoreAll())
     }
     
@@ -70,39 +66,35 @@ class RBTrayApp {
     
     
     static IsValidWindow(hwnd) {
+        ; Simple validation - if we can't get basic info, skip it
+        if !hwnd
+            return false
+            
+        ; Get window style and process info in one go
         try {
             style := WinGetStyle(hwnd)
-            
-            ; Basic visibility and caption check
-            if !((style & 0x10000000) && (style & 0x00C00000))  ; WS_VISIBLE && WS_CAPTION
-                return false
-            
-            ; Additional checks for problematic window types
-            try {
-                processName := WinGetProcessName(hwnd)
-                className := WinGetClass(hwnd)
-                
-                ; Skip certain system processes that might cause issues
-                if processName = "ApplicationFrameHost.exe" {
-                    this.LogCommand("Skipping ApplicationFrameHost window: " . hwnd)
-                    return false
-                }
-                
-                ; Skip certain window classes that are known to be problematic
-                if className = "Shell_TrayWnd" || className = "Shell_SecondaryTrayWnd" {
-                    this.LogCommand("Skipping system tray window: " . hwnd)
-                    return false
-                }
-            } catch {
-                ; If we can't get process info, it might be a problematic window
-                this.LogCommand("Cannot get window info for: " . hwnd . " - treating as invalid")
-                return false
-            }
-            
-            return true
+            processName := WinGetProcessName(hwnd)
+            className := WinGetClass(hwnd)
         } catch {
             return false
         }
+        
+        ; Basic checks
+        if !style || !((style & 0x10000000) && (style & 0x00C00000))  ; WS_VISIBLE && WS_CAPTION
+            return false
+            
+        ; Skip problematic window types
+        if processName = "ApplicationFrameHost.exe" {
+            this.LogCommand("Skipping ApplicationFrameHost window: " . hwnd)
+            return false
+        }
+        
+        if className = "Shell_TrayWnd" || className = "Shell_SecondaryTrayWnd" {
+            this.LogCommand("Skipping system tray window: " . hwnd)
+            return false
+        }
+        
+        return true
     }
     
     static MinimizeToTray(hwnd := "") {
@@ -113,53 +105,70 @@ class RBTrayApp {
         
         if !hwnd {
             this.LogCommand("No window handle provided")
-            return
+            return false
         }
         
         if this.trayWindows.Has(hwnd) {
             this.LogCommand("Window already in tray: " . hwnd)
-            return
+            return true
         }
         
+        ; Collect window data
+        windowData := this.CollectWindowData(hwnd)
+        if !windowData {
+            this.LogCommand("Failed to collect window data for: " . hwnd)
+            return false
+        }
+        
+        ; Create tray entry
+        iconId := "RBTray_" . this.nextIconId++
+        this.trayWindows[hwnd] := windowData
+        this.trayWindows[hwnd].iconId := iconId
+        
+        ; Add to tray menu
+        this.CreateTrayIcon(hwnd, iconId, windowData.title, windowData.processPath)
+        
+        ; Hide the window
         try {
-            windowData := this.CollectWindowData(hwnd)
-            iconId := "RBTray_" . this.nextIconId++
-            
-            this.trayWindows[hwnd] := windowData
-            this.trayWindows[hwnd].iconId := iconId
-            
-            this.CreateTrayIcon(hwnd, iconId, windowData.title, windowData.processPath)
-            
-            ; Try to hide the window with enhanced error handling
+            WinHide(hwnd)
+        } catch {
+            this.LogCommand("Failed to hide window: " . hwnd)
+            this.CleanupFailedTrayEntry(hwnd, iconId)
+            return false
+        }
+        
+        this.LogCommand("Window hidden successfully: " . hwnd)
+        return true
+    }
+    
+    static CleanupFailedTrayEntry(hwnd, iconId) {
+        ; Clean up failed tray entry
+        this.trayWindows.Delete(hwnd)
+        if this.trayIcons.Has(iconId) {
+            menuItem := this.trayIcons[iconId].menuItem
             try {
-                WinHide(hwnd)
-                this.LogCommand("Window hidden successfully: " . hwnd)
-            } catch as hideError {
-                this.LogCommand("Error hiding window " . hwnd . ": " . hideError.Message)
-                ; Remove from tray since hide failed
-                this.trayWindows.Delete(hwnd)
-                if this.trayIcons.Has(iconId) {
-                    try {
-                        menuItem := this.trayIcons[iconId].menuItem
-                        A_TrayMenu.Delete(menuItem)
-                    } catch {
-                    }
-                    this.trayIcons.Delete(iconId)
-                }
-                return false
+                A_TrayMenu.Delete(menuItem)
+            } catch {
             }
-        } catch as e {
-            this.LogCommand("Error minimizing window: " . e.Message)
+            this.trayIcons.Delete(iconId)
         }
     }
     
     static CollectWindowData(hwnd) {
-        title := WinGetTitle(hwnd)
-        processName := WinGetProcessName(hwnd)
-        processPath := WinGetProcessPath(hwnd)
-        className := WinGetClass(hwnd)
-        pid := WinGetPID(hwnd)
+        ; Get all window data at once - if any fails, return null
+        try {
+            title := WinGetTitle(hwnd)
+            processName := WinGetProcessName(hwnd)
+            processPath := WinGetProcessPath(hwnd)
+            className := WinGetClass(hwnd)
+            pid := WinGetPID(hwnd)
+        } catch {
+            return false
+        }
         
+        if !processName  ; Most important field
+            return false
+            
         this.LogCommand("Window details - Title: " . title . ", Process: " . processName . ", Class: " . className . ", PID: " . pid)
         
         return {
@@ -192,39 +201,37 @@ class RBTrayApp {
     
     static RestoreWindow(hwnd) {
         if !this.trayWindows.Has(hwnd)
-            return
+            return false
         
-        try {
-            windowInfo := this.trayWindows[hwnd]
-            
-            if this.trayIcons.Has(windowInfo.iconId) {
-                menuItem := this.trayIcons[windowInfo.iconId].menuItem
-                try {
-                    A_TrayMenu.Delete(menuItem)
-                } catch {
-                }
-                this.trayIcons.Delete(windowInfo.iconId)
-            }
-            
-            ; Try to show and activate the window with enhanced error handling
+        windowInfo := this.trayWindows[hwnd]
+        
+        ; Remove from tray menu
+        if this.trayIcons.Has(windowInfo.iconId) {
+            menuItem := this.trayIcons[windowInfo.iconId].menuItem
             try {
-                WinShow(hwnd)
-                this.LogCommand("Window shown successfully: " . hwnd)
-            } catch as showError {
-                this.LogCommand("Error showing window " . hwnd . ": " . showError.Message)
+                A_TrayMenu.Delete(menuItem)
+            } catch {
+
             }
-            
-            try {
-                WinActivate(hwnd)
-                this.LogCommand("Window activated successfully: " . hwnd)
-            } catch as activateError {
-                this.LogCommand("Error activating window " . hwnd . ": " . activateError.Message)
-            }
-            
-            this.trayWindows.Delete(hwnd)
-        } catch as e {
-            this.LogCommand("Error restoring window: " . e.Message)
+            this.trayIcons.Delete(windowInfo.iconId)
         }
+        
+        ; Show and activate window
+        try {
+            WinShow(hwnd)
+            showResult := true
+            WinActivate(hwnd)
+            activateResult := true
+        } catch {
+            showResult := false
+            activateResult := false
+        }
+        
+        this.LogCommand("Window restore: Show=" . showResult . ", Activate=" . activateResult . " for HWND: " . hwnd)
+        
+        ; Always remove from our tracking
+        this.trayWindows.Delete(hwnd)
+        return showResult
     }
     
     static RestoreAll() {
@@ -234,33 +241,38 @@ class RBTrayApp {
     }
     
     static ReceiveCommand(wParam, lParam, msg, hwnd) {
-        try {
-            this.LogCommand("ReceiveCommand called - wParam: " . wParam . ", lParam: " . lParam . ", msg: " . msg . ", hwnd: " . hwnd)
-            command := this.ParseWMCopyData(lParam)
-            this.LogCommand("Received command: " . command)
-            
-            if InStr(command, "hide:")
-                this.ProcessHideCommand(SubStr(command, 6))
-            else if command = "restore_all"
-                this.RestoreAll()
-            else if InStr(command, "restore:")
-                this.ProcessRestoreCommand(SubStr(command, 9))
-            else if command = "list"
-                this.ProcessListCommand()
-            else
-                this.LogCommand("Unknown command: " . command)
-            
-            return true
-        } catch as e {
-            this.LogCommand("CRITICAL ERROR in ReceiveCommand: " . e.Message . " (Stack: " . e.Stack . ")")
-            ; Don't let the error kill the message handler
+        this.LogCommand("ReceiveCommand called - wParam: " . wParam . ", lParam: " . lParam . ", msg: " . msg . ", hwnd: " . hwnd)
+        
+        command := this.ParseWMCopyData(lParam)
+        if !command {
+            this.LogCommand("Failed to parse command")
             return false
         }
+        
+        this.LogCommand("Received command: " . command)
+        
+        ; Route command to appropriate handler
+        if InStr(command, "hide:") = 1
+            this.ProcessHideCommand(SubStr(command, 6))
+        else if command = "restore_all"
+            this.RestoreAll()
+        else if InStr(command, "restore:") = 1
+            this.ProcessRestoreCommand(SubStr(command, 9))
+        else if command = "list"
+            this.ProcessListCommand()
+        else
+            this.LogCommand("Unknown command: " . command)
+        
+        return true
     }
     
     static ParseWMCopyData(lParam) {
+        if !lParam
+            return ""
         dataSize := NumGet(lParam, A_PtrSize, "UInt")
         dataPtr := NumGet(lParam, 2 * A_PtrSize, "Ptr")
+        if !dataPtr || !dataSize
+            return ""
         return StrGet(dataPtr, dataSize // 2, "UTF-16")
     }
     
@@ -379,9 +391,25 @@ class RBTrayApp {
     }
     
     static LogCommand(message) {
-        ; Log in debug mode OR when command line arguments are passed (for testing)
-        if this.debugMode || A_Args.Length > 0 {
-            FileAppend(A_Now . ": " . message . "`n", A_Temp . "\\RBTray_Commands.log")
+        ; Log only in debug mode (when --debug argument is passed)
+        if this.debugMode {
+            ; Create logs directory if it doesn't exist
+            logDir := A_ScriptDir . "\logs"
+            if !DirExist(logDir)
+                DirCreate(logDir)
+            
+            ; Safe file append with retry mechanism
+            try {
+                FileAppend(A_Now . ": " . message . "`n", logDir . "\RBTray_Commands.log")
+            } catch {
+                ; Retry once after brief delay
+                Sleep(50)
+                try {
+                    FileAppend(A_Now . ": " . message . "`n", logDir . "\RBTray_Commands.log")
+                } catch {
+                    ; Silent fail - don't crash the main app
+                }
+            }
         }
     }
 }

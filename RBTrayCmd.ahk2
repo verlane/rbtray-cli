@@ -1,125 +1,109 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Off
 
+; Enable detection of hidden windows
+DetectHiddenWindows(true)
+
 class RBTrayCmd {
     static COPYDATA_MSG := 0x004A
     static debugMode := false  ; Set to true for debugging with dialogs
     
     static Main() {
+        ; Parse arguments
         if A_Args.Length == 0 {
             this.ShowUsage()
             return
         }
         
         command := A_Args[1]
+        this.debugMode := (A_Args.Length > 1 && A_Args[2] = "--debug")
         
-        ; Check for debug flag
-        if A_Args.Length > 1 && A_Args[2] = "--debug" {
-            this.debugMode := true
-        }
+        ; Validate and execute
+        if !this.IsValidCommand(command)
+            this.ExitWithError("Invalid command: " . command)
         
-        ; Validate command
-        if !this.IsValidCommand(command) {
-            this.ReportError("Invalid command: " . command)
-            if this.debugMode
-                this.ShowUsage()
-            ExitApp(1)
-        }
-        
-        ; Find RBTray main window
         rbtrayHwnd := this.FindRBTrayWindow()
-        if !rbtrayHwnd {
-            this.ReportError("RBTray is not running. Please start RBTray.ahk2 first.")
-            ExitApp(1)
-        }
+        if !rbtrayHwnd
+            this.ExitWithError("RBTray is not running. Please start RBTray.ahk2 first.")
         
-        ; Send command
-        if !this.SendCommand(rbtrayHwnd, command) {
-            this.ReportError("Failed to send command to RBTray.")
-            ExitApp(1)
-        }
+        if !this.SendCommand(rbtrayHwnd, command)
+            this.ExitWithError("Failed to send command to RBTray.")
     }
     
     static IsValidCommand(command) {
-        validCommands := [
-            "restore_all",
-            "list"
-        ]
-        
-        ; Check for exact matches
-        for validCmd in validCommands {
-            if command = validCmd
-                return true
-        }
-        
-        ; Check for pattern matches
-        if InStr(command, "hide:") = 1 || InStr(command, "restore:") = 1
-            return true
-        
-        return false
+        ; Simple pattern matching
+        return (command = "restore_all" 
+            || command = "list" 
+            || InStr(command, "hide:") = 1 
+            || InStr(command, "restore:") = 1)
     }
     
     static FindRBTrayWindow() {
-        searchMethods := [
-            () => WinExist("RBTray_MessageWindow"),
-            () => WinExist("RBTray ahk_class AutoHotkeyGUI"),
-            () => WinExist("ahk_class AutoHotkeyGUI"),
-            () => this.SearchAllWindows()
-        ]
+        ; Try common window searches in order of likelihood
+        hwnd := WinExist("RBTray_MessageWindow")
+            || WinExist("RBTray ahk_class AutoHotkeyGUI")
+            || WinExist("ahk_class AutoHotkeyGUI")
+            || this.SearchAllWindows()
         
-        for method in searchMethods {
-            hwnd := method()
-            if hwnd {
-                this.LogDebug("Found RBTray window: " . hwnd)
-                return hwnd
-            }
-        }
-        
-        this.LogDebug("RBTray window not found")
-        return 0
+        if hwnd
+            this.LogDebug("Found RBTray window: " . hwnd)
+        else
+            this.LogDebug("RBTray window not found")
+            
+        return hwnd
     }
     
     static SearchAllWindows() {
+        ; Fallback: search through all AutoHotkey GUIs
         try {
             allWindows := WinGetList("ahk_class AutoHotkeyGUI")
-            for hwnd in allWindows {
-                try {
-                    title := WinGetTitle(hwnd)
-                    if InStr(title, "RBTray") {
-                        return hwnd
-                    }
-                } catch {
-                    continue
-                }
-            }
         } catch {
+            return 0
+        }
+        if !allWindows
+            return 0
+            
+        for hwnd in allWindows {
+            try {
+                title := WinGetTitle(hwnd)
+            } catch {
+                title := ""
+            }
+            if InStr(title, "RBTray")
+                return hwnd
         }
         return 0
     }
     
     static SendCommand(targetHwnd, command) {
+        this.LogDebug("Sending command: " . command . " to HWND: " . targetHwnd)
+        
+        ; Create command buffer (UTF-16)
+        commandBuffer := Buffer(StrPut(command, "UTF-16") * 2)
+        StrPut(command, commandBuffer, "UTF-16")
+        
+        ; Create COPYDATASTRUCT
+        cds := Buffer(3 * A_PtrSize)
+        NumPut("UPtr", 0, cds, 0)  ; dwData
+        NumPut("UInt", commandBuffer.Size, cds, A_PtrSize)  ; cbData
+        NumPut("Ptr", commandBuffer.Ptr, cds, 2 * A_PtrSize)  ; lpData
+        
+        ; Send message
         try {
-            this.LogDebug("Sending command: " . command . " to HWND: " . targetHwnd)
-            
-            ; Create buffer for the command string (UTF-16)
-            commandBuffer := Buffer(StrPut(command, "UTF-16") * 2)
-            StrPut(command, commandBuffer, "UTF-16")
-            
-            ; Create COPYDATASTRUCT
-            cds := Buffer(3 * A_PtrSize)
-            NumPut("UPtr", 0, cds, 0)  ; dwData
-            NumPut("UInt", commandBuffer.Size, cds, A_PtrSize)  ; cbData
-            NumPut("Ptr", commandBuffer.Ptr, cds, 2 * A_PtrSize)  ; lpData
-            
-            ; Send message
             result := SendMessage(this.COPYDATA_MSG, 0, cds.Ptr, targetHwnd)
-            this.LogDebug("Message sent, result: " . result)
-            
-            return true
-        } catch as e {
-            this.LogDebug("Error sending command: " . e.Message)
-            return false
+        } catch {
+            result := 0
         }
+        this.LogDebug("Message sent, result: " . result)
+        
+        return result != 0
+    }
+    
+    static ExitWithError(message) {
+        this.ReportError(message)
+        if this.debugMode
+            this.ShowUsage()
+        ExitApp(1)
     }
     
     static ShowUsage() {
@@ -150,16 +134,31 @@ class RBTrayCmd {
     }
     
     static LogDebug(message) {
-        ; Always log for debugging
-        FileAppend(A_Now . ": " . message . "`n", A_Temp . "\\RBTrayCmd_Debug.log")
+        ; Log only in debug mode
+        if this.debugMode {
+            logDir := A_ScriptDir . "\logs"
+            if !DirExist(logDir)
+                DirCreate(logDir)
+            
+            ; Safe file append with retry mechanism
+            try {
+                FileAppend(A_Now . ": " . message . "`n", logDir . "\RBTrayCmd_Debug.log")
+            } catch {
+                ; Retry once after brief delay
+                Sleep(50)
+                try {
+                    FileAppend(A_Now . ": " . message . "`n", logDir . "\RBTrayCmd_Debug.log")
+                } catch {
+                    ; Silent fail - don't crash the CLI tool
+                }
+            }
+        }
     }
     
     static ReportError(message) {
-        ; Log error and optionally show dialog based on debug mode
         this.LogDebug("ERROR: " . message)
-        if this.debugMode {
+        if this.debugMode
             this.ShowError(message)
-        }
     }
 }
 
