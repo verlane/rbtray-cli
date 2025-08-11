@@ -35,11 +35,7 @@ class RBTrayApp {
     }
     
     static InitializeMessageReceiver() {
-        ; Hidden GUI window to receive CLI messages (always create this)
-        this.gui := Gui("+AlwaysOnTop -MaximizeBox -MinimizeBox", "RBTray")
-        this.gui.Show("Hide")
-        
-        ; Create message window for CLI communication
+        ; Single GUI window for CLI communication
         this.msgWin := Gui("+ToolWindow -MaximizeBox -MinimizeBox", "RBTray_MessageWindow")
         this.msgWin.Add("Text", , "RBTray Message Receiver`nThis window receives CLI commands")
         
@@ -60,7 +56,7 @@ class RBTrayApp {
     }
     
     static ShowDebugInfo() {
-        ToolTip("RBTray started - HWND: " . this.gui.Hwnd . "`nClass: " . WinGetClass(this.gui.Hwnd))
+        ToolTip("RBTray started - HWND: " . this.msgWin.Hwnd . "`nClass: " . WinGetClass(this.msgWin.Hwnd))
         SetTimer(() => ToolTip(), -3000)
     }
     
